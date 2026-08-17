@@ -777,6 +777,13 @@ body {
     width: 100%;
     position: relative;
     aspect-ratio: 16 / 9;
+    cursor: grab;
+    touch-action: pan-y;
+    user-select: none;
+}
+
+.project-image-gallery.is-dragging {
+    cursor: grabbing;
 }
 
 .gallery-img {
@@ -786,13 +793,27 @@ body {
     object-position: top center;
     position: absolute;
     inset: 0;
-    opacity: 0;
-    transition: opacity 0.5s ease;
+    opacity: 1;
+    transform: translate3d(100%, 0, 0);
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
     background: var(--bg-elevated);
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    will-change: transform;
 }
 
 .gallery-img.active {
     opacity: 1;
+    transform: translate3d(0, 0, 0);
+}
+
+.gallery-img.is-before {
+    transform: translate3d(-100%, 0, 0);
+}
+
+.gallery-img.is-after {
+    transform: translate3d(100%, 0, 0);
 }
 
 /* App screenshot images - contain instead of crop */

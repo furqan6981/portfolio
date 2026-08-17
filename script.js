@@ -232,32 +232,75 @@ if (heroBackground || gradientOrbs.length > 0) {
 
 const initGalleries = () => {
     document.querySelectorAll('.project-image-gallery').forEach(gallery => {
-        const images = gallery.querySelectorAll('.gallery-img');
+        const images = Array.from(gallery.querySelectorAll('.gallery-img'));
         const nav = gallery.closest('.project-image-wrap')?.querySelector('.gallery-nav');
-        const dots = nav ? nav.querySelectorAll('.dot') : [];
+        const dots = nav ? Array.from(nav.querySelectorAll('.dot')) : [];
         if (images.length <= 1) return;
 
         let current = 0;
         let interval = null;
+        let startX = 0;
+        let startY = 0;
+        let pointerId = null;
+        let didSwipe = false;
+        let resetTimer = null;
 
-        const show = (idx) => {
-            images.forEach((img, i) => img.classList.toggle('active', i === idx));
-            dots.forEach((dot, i) => dot.classList.toggle('active', i === idx));
-            current = idx;
+        const positionImages = (activeIndex) => {
+            images.forEach((img, i) => {
+                img.classList.toggle('active', i === activeIndex);
+                img.classList.toggle('is-before', i < activeIndex);
+                img.classList.toggle('is-after', i > activeIndex);
+            });
         };
 
-        const next = () => show((current + 1) % images.length);
+        const show = (idx, direction = idx > current ? 1 : -1) => {
+            const nextIndex = (idx + images.length) % images.length;
+            if (nextIndex === current) return;
 
-        const startAutoRotate = () => { interval = setInterval(next, 4000); };
-        const stopAutoRotate = () => { clearInterval(interval); interval = null; };
+            const outgoing = images[current];
+            const incoming = images[nextIndex];
+            const incomingClass = direction > 0 ? 'is-after' : 'is-before';
+            const outgoingClass = direction > 0 ? 'is-before' : 'is-after';
+
+            incoming.style.transition = 'none';
+            incoming.classList.remove('active', 'is-before', 'is-after');
+            incoming.classList.add(incomingClass);
+            void incoming.offsetWidth;
+            incoming.style.transition = '';
+
+            outgoing.classList.remove('active', 'is-before', 'is-after');
+            outgoing.classList.add(outgoingClass);
+            incoming.classList.remove('is-before', 'is-after');
+            incoming.classList.add('active');
+            dots.forEach((dot, i) => dot.classList.toggle('active', i === nextIndex));
+            current = nextIndex;
+
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(() => positionImages(current), 500);
+        };
+
+        const next = () => show(current + 1, 1);
+        const previous = () => show(current - 1, -1);
+
+        const startAutoRotate = () => {
+            if (!interval) interval = setInterval(next, 4000);
+        };
+        const stopAutoRotate = () => {
+            clearInterval(interval);
+            interval = null;
+        };
+
+        const restartAutoRotate = () => {
+            stopAutoRotate();
+            startAutoRotate();
+        };
 
         dots.forEach((dot, i) => {
             dot.addEventListener('click', (event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                show(i);
-                stopAutoRotate();
-                startAutoRotate();
+                show(i, i > current ? 1 : -1);
+                restartAutoRotate();
             });
         });
 
@@ -265,8 +308,57 @@ const initGalleries = () => {
         if (wrap) {
             wrap.addEventListener('mouseenter', stopAutoRotate);
             wrap.addEventListener('mouseleave', startAutoRotate);
+            wrap.addEventListener('click', (event) => {
+                if (!didSwipe) return;
+                event.preventDefault();
+                event.stopPropagation();
+            }, true);
         }
 
+        gallery.addEventListener('pointerdown', (event) => {
+            if (event.button !== undefined && event.button !== 0) return;
+            startX = event.clientX;
+            startY = event.clientY;
+            pointerId = event.pointerId;
+            didSwipe = false;
+            gallery.classList.add('is-dragging');
+            gallery.setPointerCapture?.(pointerId);
+            stopAutoRotate();
+        });
+
+        gallery.addEventListener('pointermove', (event) => {
+            if (pointerId !== event.pointerId) return;
+            const deltaX = event.clientX - startX;
+            const deltaY = event.clientY - startY;
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 8) {
+                event.preventDefault();
+            }
+        });
+
+        const finishSwipe = (event) => {
+            if (pointerId !== event.pointerId) return;
+            const deltaX = event.clientX - startX;
+            const deltaY = event.clientY - startY;
+
+            gallery.classList.remove('is-dragging');
+            if (gallery.hasPointerCapture?.(pointerId)) {
+                gallery.releasePointerCapture(pointerId);
+            }
+            pointerId = null;
+
+            if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                didSwipe = true;
+                deltaX < 0 ? next() : previous();
+                setTimeout(() => { didSwipe = false; }, 0);
+            }
+
+            startAutoRotate();
+        };
+
+        gallery.addEventListener('pointerup', finishSwipe);
+        gallery.addEventListener('pointercancel', finishSwipe);
+
+        positionImages(current);
         startAutoRotate();
     });
 };
